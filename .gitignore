@@ -1,0 +1,10 @@
+.claude/
+node_modules/
+dist/
+reports/
+*.log
+.env
+config.json
+config.local.json
+agent/mock.log
+agent/mock-err.log

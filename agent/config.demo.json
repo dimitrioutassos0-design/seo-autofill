@@ -1,0 +1,30 @@
+{
+  "stores": [
+    {
+      "id": "demo-wc",
+      "platform": "woocommerce",
+      "baseUrl": "http://localhost:9877",
+      "auth": { "type": "token", "value": "mock-token-for-demo" },
+      "batchSize": 10,
+      "rps": 50,
+      "concurrency": 4,
+      "statuses": ["publish", "draft"]
+    },
+    {
+      "id": "demo-shopify",
+      "platform": "shopify",
+      "storeDomain": "localhost:9877",
+      "auth": { "type": "shopify_admin", "accessToken": "shpat_mock_demo_token" },
+      "batchSize": 10,
+      "rps": 50,
+      "concurrency": 4,
+      "statuses": ["ACTIVE"]
+    }
+  ],
+  "provider": "anthropic",
+  "model": "demo",
+  "dryRun": false,
+  "reportsDir": "./reports",
+  "minSignalChars": 20,
+  "apiKeys": {}
+}

@@ -1,0 +1,31 @@
+{
+  "stores": [
+    {
+      "id": "store-a",
+      "baseUrl": "https://store-a.example.com",
+      "auth": { "type": "token", "value": "REPLACE_WITH_PLUGIN_TOKEN" },
+      "batchSize": 20,
+      "rps": 2,
+      "concurrency": 2,
+      "statuses": ["publish", "draft"]
+    },
+    {
+      "id": "store-b",
+      "baseUrl": "https://store-b.example.com",
+      "auth": { "type": "app_password", "username": "seo-bot", "value": "REPLACE_WITH_APP_PASSWORD" },
+      "batchSize": 10,
+      "rps": 1,
+      "concurrency": 1,
+      "statuses": ["publish"]
+    }
+  ],
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "dryRun": true,
+  "reportsDir": "./reports",
+  "minSignalChars": 30,
+  "apiKeys": {
+    "anthropic": "",
+    "openai": ""
+  }
+}
