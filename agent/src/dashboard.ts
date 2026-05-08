@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readdir, readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import type { Config } from './config.js';
 import { redactSecrets, fieldsForPlatform } from './config.js';
 import { createAdapter } from './platform.js';
@@ -54,7 +54,7 @@ export function startDashboard(opts: DashboardOptions): void {
     }
 
     if (req.method === 'GET' && path.startsWith('/api/stores/') && path.endsWith('/scan')) {
-      const storeId = path.split('/')[3];
+      const storeId = decodeURIComponent(path.split('/')[3] ?? '');
       const store = cfg.stores.find((s) => s.id === storeId);
       if (!store) return json(res, 404, { error: 'Store not found' });
       const adapter = createAdapter(store, cfg);
@@ -119,7 +119,8 @@ export function startDashboard(opts: DashboardOptions): void {
 
     if (req.method === 'GET' && path.startsWith('/api/reports/')) {
       const file = decodeURIComponent(path.slice('/api/reports/'.length));
-      const filePath = resolve(process.cwd(), cfg.reportsDir, file);
+      const filePath = resolveReportFilePath(cfg.reportsDir, file);
+      if (!filePath) return json(res, 400, { error: 'Invalid report file' });
       try {
         const data = await readFile(filePath, 'utf8');
         return json(res, 200, JSON.parse(data));
@@ -135,6 +136,13 @@ export function startDashboard(opts: DashboardOptions): void {
     process.stdout.write(`\nSEO Autofill Dashboard running at http://localhost:${port}\n`);
     process.stdout.write(`Stores: ${cfg.stores.map((s) => `${s.id} (${s.platform})`).join(', ')}\n\n`);
   });
+}
+
+export function resolveReportFilePath(reportsDir: string, file: string): string | null {
+  if (!file || file !== basename(file) || !file.toLowerCase().endsWith('.json')) {
+    return null;
+  }
+  return resolve(process.cwd(), reportsDir, file);
 }
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -159,21 +167,22 @@ function dashboardHtml(): string {
 <title>SEO Autofill Dashboard</title>
 <style>
   :root {
-    --bg: #0a0a0f;
-    --surface: #12121a;
-    --surface-2: #1a1a26;
-    --border: #2a2a3a;
+    --bg: #090a0d;
+    --surface: #13151b;
+    --surface-2: #1a1d25;
+    --border: #2b303b;
     --text: #e4e4ed;
     --text-dim: #8888a0;
-    --accent: #6c63ff;
-    --accent-glow: rgba(108, 99, 255, 0.15);
+    --accent: #4f8cff;
+    --accent-hover: #3f7bf0;
+    --accent-glow: rgba(79, 140, 255, 0.16);
     --green: #34d399;
     --green-bg: rgba(52, 211, 153, 0.1);
     --red: #f87171;
     --red-bg: rgba(248, 113, 113, 0.1);
     --amber: #fbbf24;
     --amber-bg: rgba(251, 191, 36, 0.1);
-    --radius: 12px;
+    --radius: 8px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -214,7 +223,7 @@ function dashboardHtml(): string {
     color: #fff;
   }
   .topbar-actions { display: flex; gap: 10px; align-items: center; }
-  .container { max-width: 1320px; margin: 0 auto; padding: 28px 32px; }
+  .container { max-width: 1320px; margin: 0 auto; padding: 28px 32px; overflow-x: hidden; }
 
   .tabs {
     display: flex;
@@ -225,6 +234,8 @@ function dashboardHtml(): string {
     margin-bottom: 24px;
     border: 1px solid var(--border);
     width: fit-content;
+    max-width: 100%;
+    overflow-x: auto;
   }
   .tab {
     padding: 8px 20px;
@@ -236,6 +247,7 @@ function dashboardHtml(): string {
     border: none;
     background: transparent;
     transition: all 0.15s;
+    white-space: nowrap;
   }
   .tab:hover { color: var(--text); background: var(--surface-2); }
   .tab.active { color: #fff; background: var(--accent); }
@@ -272,6 +284,8 @@ function dashboardHtml(): string {
   }
   .panel-header h2 { font-size: 15px; font-weight: 600; }
   .panel-body { padding: 0; }
+  .table-scroll { overflow-x: auto; }
+  .data-table { min-width: 900px; }
 
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th {
@@ -336,7 +350,7 @@ function dashboardHtml(): string {
   .btn:hover { background: var(--border); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn-primary:hover { background: #5b52ee; }
+  .btn-primary:hover { background: var(--accent-hover); }
   .btn-sm { padding: 5px 12px; font-size: 12px; }
 
   .run-bar {
@@ -360,6 +374,13 @@ function dashboardHtml(): string {
     font-size: 13px;
   }
   .run-bar select:focus, .run-bar input:focus { outline: none; border-color: var(--accent); }
+  .product-toolbar {
+    margin-bottom: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
 
   .toast {
     position: fixed;
@@ -424,10 +445,22 @@ function dashboardHtml(): string {
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .cell-text {
-    max-width: 250px;
+    max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .products-table {
+    min-width: 1080px;
+    table-layout: fixed;
+  }
+  .products-table th:nth-child(1), .products-table td:nth-child(1) { width: 52px; }
+  .products-table th:nth-child(2), .products-table td:nth-child(2) { width: 170px; }
+  .products-table th:nth-child(3), .products-table td:nth-child(3) { width: 120px; }
+  .products-table th:nth-child(4), .products-table td:nth-child(4) { width: 78px; }
+  .products-table th:nth-child(n+5), .products-table td:nth-child(n+5) { width: 165px; }
+  .product-name, .sku-cell {
+    overflow-wrap: anywhere;
   }
 
   .modal-overlay {
@@ -475,6 +508,17 @@ function dashboardHtml(): string {
     .topbar { padding: 12px 16px; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
     .run-bar { flex-direction: column; align-items: stretch; }
+    .run-bar > div { width: 100%; }
+    .run-bar div[style*="margin-left:auto"] { margin-left: 0 !important; }
+    .run-bar select, .run-bar input[type=number], .btn-primary { width: 100%; }
+    .stats-grid { gap: 10px; }
+    .stat-card { padding: 14px; }
+  }
+  @media (max-width: 480px) {
+    .tabs { width: 100%; gap: 2px; }
+    .tab { flex: 1; padding: 8px 8px; font-size: 12px; }
+    .product-toolbar { flex-direction: column; align-items: stretch; }
+    .product-toolbar select { width: 100%; }
   }
 </style>
 </head>
@@ -503,8 +547,8 @@ function dashboardHtml(): string {
         <h2>Stores</h2>
         <button class="btn btn-sm" onclick="loadOverview()">Refresh</button>
       </div>
-      <div class="panel-body">
-        <table>
+      <div class="panel-body table-scroll">
+        <table class="data-table">
           <thead><tr><th>Store ID</th><th>Platform</th><th>URL</th><th>Target Fields</th><th>Products</th><th>Missing</th><th>Coverage</th></tr></thead>
           <tbody id="stores-table"></tbody>
         </table>
@@ -514,7 +558,7 @@ function dashboardHtml(): string {
 
   <!-- Products Tab -->
   <div id="tab-products" class="tab-content" style="display:none">
-    <div style="margin-bottom:16px;display:flex;gap:12px;align-items:center">
+    <div class="product-toolbar">
       <select id="store-select" onchange="loadProducts()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:13px"></select>
       <select id="filter-select" onchange="filterProducts()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:13px">
         <option value="all">All products</option>
@@ -524,8 +568,8 @@ function dashboardHtml(): string {
       <span id="product-count" style="font-size:12px;color:var(--text-dim)"></span>
     </div>
     <div class="panel">
-      <div class="panel-body" style="overflow-x:auto;max-height:65vh;overflow-y:auto">
-        <table>
+      <div class="panel-body table-scroll" style="max-height:65vh;overflow-y:auto">
+        <table class="products-table">
           <thead id="products-thead"></thead>
           <tbody id="products-table"></tbody>
         </table>
@@ -609,7 +653,17 @@ let storesData = [];
 
 async function api(path, opts) {
   const res = await fetch(API + path, opts);
-  return res.json();
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    const msg = data && (data.error || data.message) ? (data.error || data.message) : 'Request failed with status ' + res.status;
+    throw new Error(msg);
+  }
+  return data;
 }
 
 function switchTab(name) {
@@ -630,81 +684,105 @@ function toast(msg, duration = 3000) {
 }
 
 async function loadOverview() {
-  const data = await api('/api/stores');
-  storesData = data.stores;
-  populateStoreSelects(data.stores);
+  try {
+    setStatus('Scanning stores...');
+    const data = await api('/api/stores');
+    storesData = data.stores;
+    populateStoreSelects(data.stores);
 
-  let totalProducts = 0, totalMissing = 0, totalFields = 0, filledFields = 0;
-  const rows = [];
+    let totalProducts = 0, productsNeedingSeo = 0, missingFields = 0, totalFields = 0, filledFields = 0;
+    const rows = [];
 
-  for (const store of data.stores) {
-    try {
-      const scan = await api('/api/stores/' + store.id + '/scan?limit=500');
-      const products = scan.items;
-      const missing = products.filter(p => p.missing_fields.length > 0).length;
-      const tf = products.length * store.fields.length;
-      const mf = products.reduce((s, p) => s + p.missing_fields.filter(f => store.fields.includes(f)).length, 0);
-      const ff = tf - mf;
-      const pct = tf ? Math.round((ff / tf) * 100) : 100;
+    for (const store of data.stores) {
+      try {
+        const scan = await api('/api/stores/' + encodeURIComponent(store.id) + '/scan?limit=500');
+        const products = scan.items;
+        const missing = products.filter(p => p.missing_fields.length > 0).length;
+        const tf = products.length * store.fields.length;
+        const mf = products.reduce((s, p) => s + p.missing_fields.filter(f => store.fields.includes(f)).length, 0);
+        const ff = tf - mf;
+        const pct = tf ? Math.round((ff / tf) * 100) : 100;
 
-      totalProducts += products.length;
-      totalMissing += missing;
-      totalFields += tf;
-      filledFields += ff;
+        totalProducts += products.length;
+        productsNeedingSeo += missing;
+        missingFields += mf;
+        totalFields += tf;
+        filledFields += ff;
 
-      rows.push('<tr>' +
-        '<td style="font-weight:600">' + store.id + '</td>' +
-        '<td><span class="badge ' + (store.platform === 'shopify' ? 'badge-green' : 'badge-amber') + '">' + store.platform + '</span></td>' +
-        '<td style="color:var(--text-dim);font-size:12px">' + esc(store.url) + '</td>' +
-        '<td><div class="field-grid">' + store.fields.map(f => '<span class="field-chip filled">' + f + '</span>').join('') + '</div></td>' +
-        '<td>' + products.length + '</td>' +
-        '<td>' + (missing > 0 ? '<span style="color:var(--red)">' + missing + '</span>' : '<span style="color:var(--green)">0</span>') + '</td>' +
-        '<td><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div><span style="font-size:11px;color:var(--text-dim)">' + pct + '%</span></td>' +
-      '</tr>');
-    } catch (e) {
-      rows.push('<tr><td style="font-weight:600">' + store.id + '</td><td colspan="6" style="color:var(--red)">Error: ' + esc(e.message) + '</td></tr>');
+        rows.push('<tr>' +
+          '<td style="font-weight:600">' + esc(store.id) + '</td>' +
+          '<td><span class="badge ' + (store.platform === 'shopify' ? 'badge-green' : 'badge-amber') + '">' + esc(store.platform) + '</span></td>' +
+          '<td style="color:var(--text-dim);font-size:12px">' + esc(store.url) + '</td>' +
+          '<td><div class="field-grid">' + store.fields.map(f => '<span class="field-chip filled">' + esc(f) + '</span>').join('') + '</div></td>' +
+          '<td>' + products.length + '</td>' +
+          '<td>' + (missing > 0 ? '<span style="color:var(--red)">' + missing + '</span>' : '<span style="color:var(--green)">0</span>') + '</td>' +
+          '<td><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div><span style="font-size:11px;color:var(--text-dim)">' + pct + '%</span></td>' +
+        '</tr>');
+      } catch (e) {
+        rows.push('<tr><td style="font-weight:600">' + esc(store.id) + '</td><td colspan="6" style="color:var(--red)">Error: ' + esc(e.message) + '</td></tr>');
+      }
     }
+
+    const totalPct = totalFields ? Math.round((filledFields / totalFields) * 100) : 100;
+
+    document.getElementById('stats-grid').innerHTML =
+      statCard('Total Products', totalProducts, '') +
+      statCard('Products Needing SEO', productsNeedingSeo > 0 ? productsNeedingSeo : 'None', productsNeedingSeo > 0 ? 'red' : 'green', missingFields + ' empty fields') +
+      statCard('Field Coverage', totalPct + '%', totalPct === 100 ? 'green' : totalPct > 70 ? 'amber' : 'red') +
+      statCard('Stores', data.stores.length, '');
+
+    document.getElementById('stores-table').innerHTML = rows.join('');
+    setStatus('Ready');
+  } catch (e) {
+    setStatus('Unable to load stores');
+    document.getElementById('stats-grid').innerHTML = '';
+    document.getElementById('stores-table').innerHTML = '<tr><td colspan="7" class="empty-state">Unable to load stores: ' + esc(e.message) + '</td></tr>';
+    toast('Unable to load stores: ' + e.message, 5000);
   }
-
-  const totalPct = totalFields ? Math.round((filledFields / totalFields) * 100) : 100;
-
-  document.getElementById('stats-grid').innerHTML =
-    statCard('Total Products', totalProducts, '') +
-    statCard('Missing Fields', totalMissing > 0 ? totalMissing + ' products' : 'None', totalMissing > 0 ? 'red' : 'green') +
-    statCard('Field Coverage', totalPct + '%', totalPct === 100 ? 'green' : totalPct > 70 ? 'amber' : 'red') +
-    statCard('Stores', data.stores.length, '');
-
-  document.getElementById('stores-table').innerHTML = rows.join('');
 }
 
-function statCard(label, value, color) {
+function statCard(label, value, color, sub) {
   const style = color === 'green' ? 'color:var(--green)' : color === 'red' ? 'color:var(--red)' : color === 'amber' ? 'color:var(--amber)' : '';
-  return '<div class="stat-card"><div class="label">' + label + '</div><div class="value" style="' + style + '">' + value + '</div></div>';
+  return '<div class="stat-card"><div class="label">' + esc(label) + '</div><div class="value" style="' + style + '">' + esc(value) + '</div>' + (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>';
 }
 
 function populateStoreSelects(stores) {
   const sel1 = document.getElementById('store-select');
   const sel2 = document.getElementById('run-store');
   if (sel1.children.length <= 1) {
-    sel1.innerHTML = stores.map(s => '<option value="' + s.id + '">' + s.id + ' (' + s.platform + ')</option>').join('');
+    sel1.innerHTML = stores.map(s => '<option value="' + esc(s.id) + '">' + esc(s.id) + ' (' + esc(s.platform) + ')</option>').join('');
   }
   if (sel2.children.length <= 1) {
-    sel2.innerHTML = '<option value="">All stores</option>' + stores.map(s => '<option value="' + s.id + '">' + s.id + ' (' + s.platform + ')</option>').join('');
+    sel2.innerHTML = '<option value="">All stores</option>' + stores.map(s => '<option value="' + esc(s.id) + '">' + esc(s.id) + ' (' + esc(s.platform) + ')</option>').join('');
   }
 }
 
+async function ensureStoresLoaded() {
+  if (storesData.length) return;
+  const data = await api('/api/stores');
+  storesData = data.stores;
+  populateStoreSelects(data.stores);
+}
+
 async function loadProducts() {
-  const storeId = document.getElementById('store-select').value;
-  if (!storeId) return;
-  const store = storesData.find(s => s.id === storeId);
-  const fields = store ? store.fields : ['description','short_description','yoast_title','yoast_metadesc'];
-  const data = await api('/api/stores/' + storeId + '/scan?limit=500');
-  allProducts = data.items;
+  try {
+    await ensureStoresLoaded();
+    const storeId = document.getElementById('store-select').value;
+    if (!storeId) return;
+    const store = storesData.find(s => s.id === storeId);
+    const fields = store ? store.fields : ['description','short_description','yoast_title','yoast_metadesc'];
+    const data = await api('/api/stores/' + encodeURIComponent(storeId) + '/scan?limit=500');
+    allProducts = data.items;
 
-  document.getElementById('products-thead').innerHTML = '<tr><th>ID</th><th>Name</th><th>SKU</th><th>Type</th>' +
-    fields.map(f => '<th>' + f.replace(/_/g, ' ') + '</th>').join('') + '</tr>';
+    document.getElementById('products-thead').innerHTML = '<tr><th>ID</th><th>Name</th><th>SKU</th><th>Type</th>' +
+      fields.map(f => '<th>' + esc(f.replace(/_/g, ' ')) + '</th>').join('') + '</tr>';
 
-  renderProducts(fields);
+    renderProducts(fields);
+  } catch (e) {
+    document.getElementById('product-count').textContent = '';
+    document.getElementById('products-table').innerHTML = '<tr><td class="empty-state">Unable to load products: ' + esc(e.message) + '</td></tr>';
+    toast('Unable to load products: ' + e.message, 5000);
+  }
 }
 
 function filterProducts() {
@@ -727,9 +805,9 @@ function renderProducts(fields) {
       const display = val.length > 60 ? val.slice(0, 60) + '...' : val;
       return '<td class="cell-text" title="' + esc(val) + '"><span style="color:var(--green)">' + esc(display) + '</span></td>';
     }).join('');
-    return '<tr><td style="font-weight:600;color:var(--text-dim)">' + p.id + '</td>' +
-      '<td style="font-weight:500">' + esc(p.name) + '</td>' +
-      '<td style="color:var(--text-dim);font-size:12px">' + esc(p.sku || '-') + '</td>' +
+    return '<tr><td style="font-weight:600;color:var(--text-dim)">' + esc(p.id) + '</td>' +
+      '<td class="product-name" style="font-weight:500">' + esc(p.name) + '</td>' +
+      '<td class="sku-cell" style="color:var(--text-dim);font-size:12px">' + esc(p.sku || '-') + '</td>' +
       '<td style="color:var(--text-dim)">' + esc(p.type) + '</td>' +
       cells + '</tr>';
   }).join('');
@@ -749,6 +827,7 @@ async function startRun() {
   const dryRun = document.getElementById('run-mode').value === 'dry';
 
   try {
+    setStatus('Run in progress...');
     const result = await api('/api/run', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -757,9 +836,11 @@ async function startRun() {
 
     document.getElementById('run-result').style.display = 'block';
     document.getElementById('run-result-pre').textContent = JSON.stringify(result, null, 2);
-    toast('Run completed: ' + result.runId);
+    toast('Run completed: ' + (result.runId || 'done'));
+    setStatus('Ready');
   } catch (e) {
     toast('Run failed: ' + e.message, 5000);
+    setStatus('Run failed');
   } finally {
     btn.disabled = false;
     btn.innerHTML = 'Run Agent';
@@ -767,8 +848,15 @@ async function startRun() {
 }
 
 async function loadReports() {
-  const data = await api('/api/reports');
   const list = document.getElementById('reports-list');
+  let data;
+  try {
+    data = await api('/api/reports');
+  } catch (e) {
+    list.innerHTML = '<div class="empty-state">Unable to load reports: ' + esc(e.message) + '</div>';
+    toast('Unable to load reports: ' + e.message, 5000);
+    return;
+  }
 
   if (!data.reports.length) {
     list.innerHTML = '<div class="empty-state">No reports yet. Run the agent to generate reports.</div>';
@@ -776,14 +864,21 @@ async function loadReports() {
   }
 
   list.innerHTML = data.reports.map(r => {
-    const ts = r.runId.replace(/T/, ' ').replace(/-(?=\\d{2}-\\d{2}Z)/g, ':').slice(0, 19).replace(/-/g, (m, i) => i > 9 ? ':' : m);
-    return '<div class="report-item" onclick="viewReport(\\'' + esc(r.file) + '\\')">' +
-      '<div><strong>' + esc(r.storeId) + '</strong><br><span class="report-meta">' + esc(r.runId) + '</span></div>' +
-      '<button class="btn btn-sm">View</button></div>';
+    return '<div class="report-item">' +
+      '<div><strong>' + esc(r.storeId || r.file) + '</strong><br><span class="report-meta">' + esc(r.runId) + '</span></div>' +
+      '<button class="btn btn-sm" data-report-file="' + esc(r.file) + '">View</button></div>';
   }).join('');
+  list.querySelectorAll('[data-report-file]').forEach(btn => {
+    btn.addEventListener('click', () => viewReport(btn.getAttribute('data-report-file')));
+  });
 }
 
 async function viewReport(file) {
+  if (!file) {
+    toast('Unable to load report: missing file name', 5000);
+    return;
+  }
+  try {
   const data = await api('/api/reports/' + encodeURIComponent(file));
   document.getElementById('modal-title').textContent = 'Report: ' + (data.storeId || file);
 
@@ -803,6 +898,9 @@ async function viewReport(file) {
 
   document.getElementById('modal-body').textContent = html || JSON.stringify(data, null, 2);
   document.getElementById('modal-overlay').classList.add('show');
+  } catch (e) {
+    toast('Unable to load report: ' + e.message, 5000);
+  }
 }
 
 function closeModal() {
@@ -810,8 +908,12 @@ function closeModal() {
 }
 
 function esc(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  if (s === undefined || s === null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function setStatus(msg) {
+  document.getElementById('status-indicator').textContent = msg;
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
