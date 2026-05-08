@@ -3,6 +3,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! class_exists( 'SEO_Autofill_REST_Controller', false ) ) {
+
 class SEO_Autofill_REST_Controller {
 
 	public function register_routes() {
@@ -76,4 +78,6 @@ class SEO_Autofill_REST_Controller {
 		}
 		return rest_ensure_response( SEO_Autofill_Rollback::rollback_run( $run_id ) );
 	}
+}
+
 }

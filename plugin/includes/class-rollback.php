@@ -3,6 +3,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! class_exists( 'SEO_Autofill_Rollback', false ) ) {
+
 class SEO_Autofill_Rollback {
 
 	const TABLE = 'seo_autofill_history';
@@ -36,6 +38,7 @@ class SEO_Autofill_Rollback {
 
 	public static function record( $run_id, $product_id, $field, $previous, $new, $model = '', $prompt_version = '' ) {
 		global $wpdb;
+		self::install_table();
 		$wpdb->insert(
 			self::table_name(),
 			array(
@@ -124,4 +127,6 @@ class SEO_Autofill_Rollback {
 
 		do_action( 'save_post', $product_id, get_post( $product_id ), true );
 	}
+}
+
 }

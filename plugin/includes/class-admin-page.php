@@ -3,6 +3,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! class_exists( 'SEO_Autofill_Admin_Page', false ) ) {
+
 class SEO_Autofill_Admin_Page {
 
 	const SLUG = 'seo-autofill';
@@ -75,4 +77,6 @@ class SEO_Autofill_Admin_Page {
 		</div>
 		<?php
 	}
+}
+
 }

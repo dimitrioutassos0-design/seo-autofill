@@ -3,6 +3,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! class_exists( 'SEO_Autofill_Scan', false ) ) {
+
 class SEO_Autofill_Scan {
 
 	const TARGET_FIELDS = array( 'description', 'short_description', 'yoast_title', 'yoast_metadesc' );
@@ -108,7 +110,7 @@ class SEO_Autofill_Scan {
 		}, $terms ) );
 	}
 
-	private function attributes( WC_Product $product ) {
+	private function attributes( $product ) {
 		$out = array();
 		foreach ( $product->get_attributes() as $attribute ) {
 			if ( ! ( $attribute instanceof WC_Product_Attribute ) ) {
@@ -129,7 +131,7 @@ class SEO_Autofill_Scan {
 		return $out;
 	}
 
-	private function image_alt( WC_Product $product ) {
+	private function image_alt( $product ) {
 		$ids = array_filter( array_merge( array( $product->get_image_id() ), (array) $product->get_gallery_image_ids() ) );
 		$out = array();
 		foreach ( $ids as $id ) {
@@ -140,4 +142,6 @@ class SEO_Autofill_Scan {
 		}
 		return array_values( array_unique( $out ) );
 	}
+}
+
 }

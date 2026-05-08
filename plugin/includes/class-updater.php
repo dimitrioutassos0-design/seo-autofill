@@ -3,6 +3,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! class_exists( 'SEO_Autofill_Updater', false ) ) {
+
 class SEO_Autofill_Updater {
 
 	const ALLOWED_FIELDS = array( 'description', 'short_description', 'yoast_title', 'yoast_metadesc' );
@@ -102,7 +104,7 @@ class SEO_Autofill_Updater {
 		);
 	}
 
-	private function read_field( WC_Product $product, $product_id, $field ) {
+	private function read_field( $product, $product_id, $field ) {
 		switch ( $field ) {
 			case 'description':
 				return (string) $product->get_description();
@@ -115,4 +117,6 @@ class SEO_Autofill_Updater {
 		}
 		return '';
 	}
+}
+
 }

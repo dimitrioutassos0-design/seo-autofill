@@ -3,6 +3,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! class_exists( 'SEO_Autofill_Auth', false ) ) {
+
 class SEO_Autofill_Auth {
 
 	const OPTION_TOKEN          = 'seo_autofill_token';
@@ -65,4 +67,6 @@ class SEO_Autofill_Auth {
 	public static function generate_token() {
 		return bin2hex( random_bytes( 32 ) );
 	}
+}
+
 }
